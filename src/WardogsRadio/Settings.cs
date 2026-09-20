@@ -9,7 +9,11 @@ public sealed class Settings
     public string? LastAppExe { get; set; }
     public float MicGain { get; set; } = 1.0f;
     public float AppGain { get; set; } = 0.6f;
+    public float HeadsetVolume { get; set; } = 1.0f;
     public bool AutoStart { get; set; } = true;
+    public bool PushToTalk { get; set; }
+    public int PushToTalkKey { get; set; } = 0x56; // V
+    public bool Ducking { get; set; }
 
     // Snapshot of the user's default devices taken before VB-CABLE installs itself as default.
     public string? SavedDefaultPlayback { get; set; }

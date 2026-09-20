@@ -45,6 +45,8 @@ public static class AudioApps
         "StartMenuExperienceHost.exe", "LockApp.exe", "NVIDIA Broadcast.exe", "SteelSeriesSonar.exe",
         "nvcontainer.exe", "NVDisplay.Container.exe", "voicemeeter8x64.exe", "voicemeeterpro.exe", "voicemeeter.exe",
         "msedgewebview2.exe", "WidgetService.exe", "Widgets.exe",
+        // The game itself. Nobody wants to put the game on the radio, and it is a trap for a stray click.
+        "WardogsClient-Win64-Shipping.exe", "Wardogs.exe", "WARDOGS.exe",
     };
 
     /// <summary>Enumerates every app with an audio session on any active playback device.</summary>
@@ -110,6 +112,33 @@ public static class AudioApps
             .OrderByDescending(a => a.IsPlaying)
             .ThenBy(a => a.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    /// <summary>Sets the Windows volume-mixer level of every audio session belonging to the app
+    /// (root process and its children). This is what the user hears in their own headset.</summary>
+    public static void SetSessionVolume(uint rootPid, float volume)
+    {
+        volume = Math.Clamp(volume, 0f, 1f);
+        var tree = ProcessTree.Snapshot();
+        using var enumerator = new MMDeviceEnumerator();
+        foreach (var device in enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
+        {
+            SessionCollection sessions;
+            try { var mgr = device.AudioSessionManager; mgr.RefreshSessions(); sessions = mgr.Sessions; }
+            catch { continue; }
+            for (int i = 0; i < sessions.Count; i++)
+            {
+                try
+                {
+                    var s = sessions[i];
+                    var pid = s.GetProcessID;
+                    if (pid == 0 || s.State == AudioSessionState.AudioSessionStateExpired) continue;
+                    if (pid != rootPid && ProcessTree.RootOfSameExe(pid, tree) != rootPid) continue;
+                    if (Math.Abs(s.SimpleAudioVolume.Volume - volume) > 0.005f) s.SimpleAudioVolume.Volume = volume;
+                }
+                catch { }
+            }
+        }
     }
 
     private static (string name, BitmapSource? icon) Describe(uint pid, string exeName)

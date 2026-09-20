@@ -7,9 +7,11 @@ namespace WardogsRadio.Audio;
 /// <summary>
 /// The whole signal chain:
 ///
-///      microphone ──┐
-///                   ├─ mix ─ soft limiter ─► virtual cable ─► the game picks it as "Wardogs Radio"
-///      app audio  ──┘   (a tap; the app keeps playing through the headset as normal)
+///      microphone ─ gate (push to talk) ─┐
+///                                        ├─ mix ─ soft limiter ─► virtual cable ─► game hears "Wardogs Radio"
+///      app audio ─ level ─ ducking ───────┘
+///
+/// The app keeps playing through the headset; we only tap a copy of it.
 /// </summary>
 public sealed class RadioEngine : IDisposable
 {
@@ -18,11 +20,12 @@ public sealed class RadioEngine : IDisposable
     private WasapiCapture? _mic;
     private ProcessLoopbackCapture? _app;
     private WasapiOut? _out;
-    private BufferedWaveProvider? _micBuffer;
-    private BufferedWaveProvider? _appBuffer;
     private VolumeSampleProvider? _micVolume;
     private VolumeSampleProvider? _appVolume;
+    private SmoothGain? _micGate;
+    private SmoothGain? _duck;
     private readonly object _gate = new();
+    private DateTime _lastVoice = DateTime.MinValue;
 
     public bool IsRunning { get; private set; }
     public float MicLevel { get; private set; }
@@ -30,9 +33,33 @@ public sealed class RadioEngine : IDisposable
 
     public event EventHandler<string>? Faulted;
 
-    private float _micGain = 1f, _appGain = 0.6f;
+    private float _micGain = 1f, _appGain = 0.6f, _localVolume = 1f;
+    private bool _micOpen = true, _ducking;
+
+    /// <summary>How loud the voice is on the radio (1 = unity).</summary>
     public float MicGain { get => _micGain; set { _micGain = value; if (_micVolume != null) _micVolume.Volume = value; } }
-    public float AppGain { get => _appGain; set { _appGain = value; if (_appVolume != null) _appVolume.Volume = value; } }
+
+    /// <summary>How loud the music is on the radio (0..1).</summary>
+    public float AppGain { get => _appGain; set { _appGain = value; ApplyAppGain(); } }
+
+    /// <summary>The app's Windows mixer volume (what the user hears). The capture is post-mixer, so we
+    /// divide it back out to keep the radio level independent of the headset level.</summary>
+    public float LocalVolume { get => _localVolume; set { _localVolume = Math.Clamp(value, 0.02f, 1f); ApplyAppGain(); } }
+
+    /// <summary>False while push-to-talk is enabled and the key is not held.</summary>
+    public bool MicOpen { get => _micOpen; set { _micOpen = value; _micGate?.SetTarget(value ? 1f : 0f); } }
+
+    /// <summary>Turn the music down while the pilot is talking.</summary>
+    public bool Ducking { get => _ducking; set { _ducking = value; if (!value) _duck?.SetTarget(1f); } }
+
+    private const float DuckLevel = 0.3f;
+    private const float VoiceThreshold = 0.04f;
+    private static readonly TimeSpan DuckHold = TimeSpan.FromMilliseconds(350);
+
+    private void ApplyAppGain()
+    {
+        if (_appVolume != null) _appVolume.Volume = _appGain / _localVolume;
+    }
 
     public void Start(string micDeviceId, uint appRootPid, string cablePlaybackId)
     {
@@ -48,32 +75,35 @@ public sealed class RadioEngine : IDisposable
 
                 // --- microphone -----------------------------------------------------------------
                 _mic = new WasapiCapture(micDevice, true, 20);
-                _micBuffer = new BufferedWaveProvider(_mic.WaveFormat)
+                var micBuffer = new BufferedWaveProvider(_mic.WaveFormat)
                 {
                     BufferDuration = TimeSpan.FromMilliseconds(500),
                     DiscardOnBufferOverflow = true,
                     ReadFully = true,
                 };
-                var micBuffer = _micBuffer;
                 _mic.DataAvailable += (_, e) => { micBuffer.AddSamples(e.Buffer, 0, e.BytesRecorded); TrimIfLagging(micBuffer); };
                 _mic.RecordingStopped += (_, e) => { if (e.Exception != null) Fault("Microphone stopped: " + e.Exception.Message); };
-                _micVolume = new VolumeSampleProvider(ToStereo48k(_micBuffer)) { Volume = _micGain };
-                var micMeter = new MeteringSampleProvider(_micVolume, 480);
-                micMeter.StreamVolume += (_, e) => MicLevel = Max(e.MaxSampleValues);
+                _micVolume = new VolumeSampleProvider(ToStereo48k(micBuffer)) { Volume = _micGain };
+                _micGate = new SmoothGain(_micVolume, attackMs: 8, releaseMs: 40) { };
+                _micGate.SetTarget(_micOpen ? 1f : 0f, immediate: true);
+                var micMeter = new MeteringSampleProvider(_micGate, 480);
+                micMeter.StreamVolume += (_, e) => { MicLevel = Max(e.MaxSampleValues); UpdateDucking(); };
 
                 // --- application audio ------------------------------------------------------------
-                _appBuffer = new BufferedWaveProvider(ProcessLoopbackCapture.OutputFormat)
+                var appBuffer = new BufferedWaveProvider(ProcessLoopbackCapture.OutputFormat)
                 {
                     BufferDuration = TimeSpan.FromMilliseconds(500),
                     DiscardOnBufferOverflow = true,
                     ReadFully = true,
                 };
-                var appBuffer = _appBuffer;
                 _app = new ProcessLoopbackCapture(appRootPid);
                 _app.DataAvailable += (_, e) => { appBuffer.AddSamples(e.Buffer, 0, e.BytesRecorded); TrimIfLagging(appBuffer); };
                 _app.Stopped += (_, ex) => { if (ex != null) Fault("App audio stopped: " + ex.Message); };
-                _appVolume = new VolumeSampleProvider(_appBuffer.ToSampleProvider()) { Volume = _appGain };
-                var appMeter = new MeteringSampleProvider(_appVolume, 480);
+                _appVolume = new VolumeSampleProvider(appBuffer.ToSampleProvider());
+                ApplyAppGain();
+                _duck = new SmoothGain(_appVolume, attackMs: 30, releaseMs: 600);
+                _duck.SetTarget(1f, immediate: true);
+                var appMeter = new MeteringSampleProvider(_duck, 480);
                 appMeter.StreamVolume += (_, e) => AppLevel = Max(e.MaxSampleValues);
 
                 // --- mix and send to the cable ----------------------------------------------------
@@ -113,15 +143,19 @@ public sealed class RadioEngine : IDisposable
         _out?.Dispose(); _out = null;
         _mic?.Dispose(); _mic = null;
         _app?.Dispose(); _app = null;
-        _micBuffer = null; _appBuffer = null;
-        _micVolume = null; _appVolume = null;
+        _micVolume = null; _appVolume = null; _micGate = null; _duck = null;
         MicLevel = 0; AppLevel = 0;
     }
 
-    private void Fault(string message)
+    private void UpdateDucking()
     {
-        Faulted?.Invoke(this, message);
+        if (_duck == null || !_ducking) return;
+        var now = DateTime.UtcNow;
+        if (MicLevel > VoiceThreshold) _lastVoice = now;
+        _duck.SetTarget(now - _lastVoice < DuckHold ? DuckLevel : 1f);
     }
+
+    private void Fault(string message) => Faulted?.Invoke(this, message);
 
     private static float Max(float[] values)
     {
@@ -147,6 +181,46 @@ public sealed class RadioEngine : IDisposable
     }
 
     public void Dispose() => Stop();
+
+    /// <summary>A gain that glides to its target instead of jumping, so gating and ducking never click.</summary>
+    private sealed class SmoothGain : ISampleProvider
+    {
+        private readonly ISampleProvider _src;
+        private readonly float _attack, _release;
+        private volatile float _target = 1f;
+        private float _current = 1f;
+
+        public SmoothGain(ISampleProvider src, double attackMs, double releaseMs)
+        {
+            _src = src;
+            int rate = src.WaveFormat.SampleRate;
+            _attack = (float)(1.0 / (attackMs / 1000.0 * rate));
+            _release = (float)(1.0 / (releaseMs / 1000.0 * rate));
+        }
+
+        public WaveFormat WaveFormat => _src.WaveFormat;
+
+        public void SetTarget(float target, bool immediate = false)
+        {
+            _target = target;
+            if (immediate) _current = target;
+        }
+
+        public int Read(float[] buffer, int offset, int count)
+        {
+            int n = _src.Read(buffer, offset, count);
+            int ch = WaveFormat.Channels;
+            float target = _target, g = _current;
+            for (int i = offset; i < offset + n; i += ch)
+            {
+                if (g < target) g = Math.Min(target, g + _attack);
+                else if (g > target) g = Math.Max(target, g - _release);
+                for (int c = 0; c < ch; c++) buffer[i + c] *= g;
+            }
+            _current = g;
+            return n;
+        }
+    }
 
     /// <summary>Gentle saturation so mic + music never hard-clips into the game.</summary>
     private sealed class SoftLimiter(ISampleProvider source) : ISampleProvider
