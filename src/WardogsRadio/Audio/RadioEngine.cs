@@ -69,9 +69,9 @@ public sealed class RadioEngine : IDisposable
             try
             {
                 var micDevice = AudioDevices.GetDevice(micDeviceId)
-                    ?? throw new InvalidOperationException("That microphone is not connected any more.");
+                    ?? throw new InvalidOperationException("Microphone is no longer connected.");
                 var cableDevice = AudioDevices.GetDevice(cablePlaybackId)
-                    ?? throw new InvalidOperationException("The Wardogs Radio virtual cable is missing. Restart the app to set it up again.");
+                    ?? throw new InvalidOperationException("Virtual microphone not found. Restart Wardogs Radio to reinstall it.");
 
                 // --- microphone -----------------------------------------------------------------
                 _mic = new WasapiCapture(micDevice, true, 20);

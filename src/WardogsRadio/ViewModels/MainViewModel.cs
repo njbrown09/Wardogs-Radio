@@ -133,24 +133,24 @@ public partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             Stage = SetupStage.Downloading;
-            SetupMessage = "Downloading the virtual microphone…";
+            SetupMessage = "Downloading virtual microphone…";
             SetupDetail = "About 1 MB, from vb-audio.com";
             await VbCableInstaller.DownloadAsync(new Progress<double>(p => DownloadProgress = p), CancellationToken.None);
 
             VbCableInstaller.SnapshotDefaults(_settings);
 
             Stage = SetupStage.Installing;
-            SetupMessage = "Windows will ask for permission. Click Yes.";
+            SetupMessage = "Windows will request permission. Choose Yes.";
             SetupDetail = VbCableInstaller.SilentInstall
-                ? "If Windows asks whether to install the driver, click Install."
-                : "Then a small VB-CABLE window opens. Click \"Install Driver\". If Windows asks about the driver, click Install. When it says done, click OK.";
+                ? "If Windows asks to install the driver, choose Install."
+                : "A VB-CABLE window will open. Choose \"Install Driver\". If Windows asks about the driver, choose Install. Choose OK when it reports completion.";
 
             var proc = VbCableInstaller.LaunchElevatedSetup();
             if (proc == null)
             {
                 Stage = SetupStage.Error;
-                SetupMessage = "Setup needs that permission to continue.";
-                SetupDetail = "Click Try again and choose Yes when Windows asks.";
+                SetupMessage = "Permission is required to continue.";
+                SetupDetail = "Choose Try again, then Yes when Windows asks.";
                 return;
             }
             await proc.WaitForExitAsync();
@@ -168,23 +168,23 @@ public partial class MainViewModel : ObservableObject, IDisposable
             if (code == VbCableInstaller.ExitCodes.RebootRequired)
             {
                 Stage = SetupStage.RebootNeeded;
-                SetupMessage = "Almost done. Windows needs a restart to finish.";
-                SetupDetail = "Wardogs Radio will open again by itself after the restart.";
+                SetupMessage = "Restart required to finish installing.";
+                SetupDetail = "Wardogs Radio reopens automatically after the restart.";
                 return;
             }
             Stage = SetupStage.Error;
             SetupMessage = code switch
             {
-                VbCableInstaller.ExitCodes.PackageMissing => "The download looks incomplete.",
-                VbCableInstaller.ExitCodes.NotAdmin => "Setup was not allowed to run as administrator.",
-                _ => "The virtual microphone did not install.",
+                VbCableInstaller.ExitCodes.PackageMissing => "Download incomplete.",
+                VbCableInstaller.ExitCodes.NotAdmin => "Setup was not granted administrator rights.",
+                _ => "Virtual microphone installation failed.",
             };
-            SetupDetail = "Click Try again. If it keeps failing, restart your PC and open Wardogs Radio again.";
+            SetupDetail = "Choose Try again. If it keeps failing, restart the PC and reopen Wardogs Radio.";
         }
         catch (Exception ex)
         {
             Stage = SetupStage.Error;
-            SetupMessage = "Setup hit a problem.";
+            SetupMessage = "Setup failed.";
             SetupDetail = ex.Message;
         }
         finally { SetupBusy = false; }
@@ -207,13 +207,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
             var proc = VbCableInstaller.LaunchElevatedSetup();
             if (proc == null)
             {
-                ErrorMessage = "Windows asked for permission and it was declined. Click \"Name it now\" and choose Yes.";
+                ErrorMessage = "Permission was declined. Choose Rename, then Yes when Windows asks.";
                 return;
             }
             await proc.WaitForExitAsync();
             RecheckCable();
             if (NeedsBranding)
-                ErrorMessage = "Could not rename the microphone (code " + proc.ExitCode + "). The radio still works; in the game pick \"" + RadioMicName + "\".";
+                ErrorMessage = "Rename failed (code " + proc.ExitCode + "). Broadcasting still works; select \"" + RadioMicName + "\" in-game.";
         }
         finally { SetupBusy = false; }
     }
@@ -238,8 +238,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private void StartRadio()
     {
         ErrorMessage = null;
-        if (SelectedMic == null) { ErrorMessage = "Pick your microphone first."; return; }
-        if (SelectedApp == null) { ErrorMessage = "Pick the app you want on the radio."; return; }
+        if (SelectedMic == null) { ErrorMessage = "Select a microphone."; return; }
+        if (SelectedApp == null) { ErrorMessage = "Select an audio source."; return; }
         _cable ??= AudioDevices.FindCable();
         if (_cable == null) { IsSetupMode = true; Stage = SetupStage.Intro; return; }
 
@@ -258,8 +258,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             IsOnAir = false;
             ErrorMessage = ProcessLoopbackCapture.IsSupported
-                ? "Could not start: " + ex.Message
-                : "Wardogs Radio needs Windows 10 (May 2020 update) or newer.";
+                ? "Unable to start: " + ex.Message
+                : "Requires Windows 10 (May 2020 update) or newer.";
             StartPreview();
         }
     }
@@ -439,7 +439,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             {
                 var reborn = fresh.FirstOrDefault(a => a.ExeName.Equals(SelectedApp.ExeName, StringComparison.OrdinalIgnoreCase));
                 if (reborn != null) SelectedApp = Apps.First(a => a.RootPid == reborn.RootPid);
-                else InfoMessage = SelectedApp.DisplayName + " was closed. Your mic is still on the radio; open it again and it reconnects.";
+                else InfoMessage = SelectedApp.DisplayName + " was closed. Voice is still broadcasting; music resumes when it is reopened.";
             }
 
             // Apps open new audio sessions over time; keep the headset level applied to all of them.

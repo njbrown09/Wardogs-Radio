@@ -112,8 +112,8 @@
                     </StackPanel>
 
                     <StackPanel Visibility="{Binding Stage, Converter={StaticResource StageIs}, ConverterParameter=Intro}">
-                        <TextBlock FontSize="15" Margin="0,0,0,6">Wardogs Radio needs a virtual microphone so the game can hear your music. This takes about a minute and only happens once.</TextBlock>
-                        <TextBlock Style="{StaticResource Muted}" Margin="0,0,0,20">Windows will ask for permission along the way. Click Yes / Install when it does.</TextBlock>
+                        <TextBlock FontSize="15" Margin="0,0,0,6">Wardogs Radio installs a virtual microphone so the game can receive the broadcast. One-time setup, about a minute.</TextBlock>
+                        <TextBlock Style="{StaticResource Muted}" Margin="0,0,0,20">Windows will request permission during setup. Choose Yes / Install.</TextBlock>
                         <Button Style="{StaticResource PrimaryButton}" Content="SET IT UP" Command="{Binding BeginSetupCommand}" HorizontalAlignment="Left" Width="220" Height="52"/>
                     </StackPanel>
 
@@ -126,7 +126,7 @@
                     <StackPanel Visibility="{Binding Stage, Converter={StaticResource StageIs}, ConverterParameter=Installing}">
                         <TextBlock Style="{StaticResource SectionLabel}" FontSize="22" Text="{Binding SetupMessage}" Margin="0,0,0,10"/>
                         <TextBlock FontSize="15" Text="{Binding SetupDetail}" Margin="0,0,0,18"/>
-                        <TextBlock Style="{StaticResource Muted}" Text="Waiting for the installer to finish…"/>
+                        <TextBlock Style="{StaticResource Muted}" Text="Waiting for the installer to complete…"/>
                     </StackPanel>
 
                     <StackPanel Visibility="{Binding Stage, Converter={StaticResource StageIs}, ConverterParameter=RebootNeeded}">
@@ -134,7 +134,7 @@
                         <TextBlock FontSize="15" Text="{Binding SetupDetail}" Margin="0,0,0,20"/>
                         <StackPanel Orientation="Horizontal">
                             <Button Style="{StaticResource PrimaryButton}" Content="RESTART NOW" Command="{Binding RebootNowCommand}" Width="220" Height="52"/>
-                            <Button Style="{StaticResource LinkButton}" Content="I'll restart later" Click="Close_Click" Margin="16,0,0,0" VerticalAlignment="Center"/>
+                            <Button Style="{StaticResource LinkButton}" Content="Restart later" Click="Close_Click" Margin="16,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </StackPanel>
 
@@ -179,7 +179,7 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock VerticalAlignment="Center" Margin="0,0,12,0">The microphone still has its factory name. Rename it to "Wardogs Radio" so it's easy to find in the game.</TextBlock>
+                        <TextBlock VerticalAlignment="Center" Margin="0,0,12,0">The virtual microphone is not yet named "Wardogs Radio". Rename it for easy selection in-game.</TextBlock>
                         <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="RENAME" Command="{Binding FinishBrandingCommand}"/>
                     </Grid>
                 </Border>
@@ -244,7 +244,7 @@
                                 <TextBlock Style="{StaticResource FieldLabel}" Text="TX" FontSize="11"/>
                             </StackPanel>
 
-                            <TextBlock Grid.Row="1" Style="{StaticResource FieldLabel}" Text="VOICE VOL" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                            <TextBlock Grid.Row="1" Style="{StaticResource FieldLabel}" Text="VOLUME" VerticalAlignment="Center" Margin="0,10,0,0"/>
                             <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="200" Value="{Binding MicVolume}" LargeChange="10" SmallChange="5" Margin="6,10,6,0"/>
                             <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding MicVolume, Converter={StaticResource Percent}}" Style="{StaticResource FieldLabel}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,10,0,0"/>
                         </Grid>
@@ -259,17 +259,17 @@
                             </Grid.ColumnDefinitions>
                             <CheckBox Content="PUSH TO TALK" IsChecked="{Binding PushToTalk}" FontFamily="{StaticResource LabelFont}" FontStretch="SemiCondensed" FontWeight="SemiBold" VerticalAlignment="Center"/>
                             <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Command="{Binding SetPushToTalkKeyCommand}" MinWidth="120" IsEnabled="{Binding PushToTalk}"
-                                    ToolTip="Click, then press any key or mouse button (side buttons work)">
+                                    ToolTip="Click, then press a key or mouse button to bind it">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="KEY" Style="{StaticResource FieldLabel}" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding PushToTalkKeyName}" FontFamily="{StaticResource LabelFont}" FontWeight="Bold" Foreground="{StaticResource SandBrush}" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
                         </Grid>
-                        <TextBlock Style="{StaticResource Muted}" Margin="48,4,0,0" Text="Off = your mic is always on the radio. On = hold the key to talk. Click the key to change it; mouse side buttons work too. Music plays either way."/>
+                        <TextBlock Style="{StaticResource Muted}" Margin="48,4,0,0" Text="Hold the bound key to transmit voice. Keyboard keys and mouse side buttons can be bound. Music is broadcast regardless."/>
 
-                        <CheckBox Content="DUCK MUSIC WHILE I TALK" IsChecked="{Binding Ducking}" FontFamily="{StaticResource LabelFont}" FontStretch="SemiCondensed" FontWeight="SemiBold" Margin="0,14,0,0"/>
-                        <TextBlock Style="{StaticResource Muted}" Margin="48,4,0,0" Text="Music drops to 30% while you speak, then comes back."/>
+                        <CheckBox Content="AUTO-DUCK MUSIC" IsChecked="{Binding Ducking}" FontFamily="{StaticResource LabelFont}" FontStretch="SemiCondensed" FontWeight="SemiBold" Margin="0,14,0,0"/>
+                        <TextBlock Style="{StaticResource Muted}" Margin="48,4,0,0" Text="Reduces music to 30% while voice is detected."/>
                     </StackPanel>
                 </Border>
 
@@ -288,7 +288,7 @@
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Style="{StaticResource SectionIndex}" Text="02 /"/>
-                            <TextBlock Grid.Column="1" Style="{StaticResource SectionLabel}" Text="WHAT PLAYS ON THE RADIO"/>
+                            <TextBlock Grid.Column="1" Style="{StaticResource SectionLabel}" Text="AUDIO SOURCE"/>
                             <Border Grid.Column="2" Style="{StaticResource SectionRule}"/>
                         </Grid>
 
@@ -315,7 +315,7 @@
                                     </ListBox.ItemTemplate>
                                 </ListBox>
                                 <Border Background="{StaticResource BgBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="1" Padding="14,12" Visibility="{Binding HasApps, Converter={StaticResource VisInv}}">
-                                    <TextBlock Style="{StaticResource Muted}" FontSize="13">Nothing is making sound right now. Open Spotify (or whatever you want on the radio), press play, and it shows up here.</TextBlock>
+                                    <TextBlock Style="{StaticResource Muted}" FontSize="13">No audio sources detected. Launch Spotify or another app, start playback, and it will appear here.</TextBlock>
                                 </Border>
                             </StackPanel>
                         </ScrollViewer>
@@ -334,11 +334,11 @@
                             <TextBlock Style="{StaticResource FieldLabel}" Text="LEVEL" VerticalAlignment="Center"/>
                             <ContentPresenter Grid.Column="1" Content="{Binding AppLevel}" ContentTemplate="{StaticResource LevelMeter}" VerticalAlignment="Center" Margin="6,0"/>
 
-                            <TextBlock Grid.Row="1" Style="{StaticResource FieldLabel}" Text="ON THE RADIO" VerticalAlignment="Center" Margin="0,10,0,0" ToolTip="How loud the music is for everyone else"/>
+                            <TextBlock Grid.Row="1" Style="{StaticResource FieldLabel}" Text="BROADCAST" VerticalAlignment="Center" Margin="0,10,0,0" ToolTip="Music level heard by other players"/>
                             <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding MusicVolume}" LargeChange="10" SmallChange="5" Margin="6,10,6,0"/>
                             <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding MusicVolume, Converter={StaticResource Percent}}" Style="{StaticResource FieldLabel}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,10,0,0"/>
 
-                            <TextBlock Grid.Row="2" Style="{StaticResource FieldLabel}" Text="IN MY HEADSET" VerticalAlignment="Center" Margin="0,8,0,0" ToolTip="How loud the music is for you. Doesn't change the radio."/>
+                            <TextBlock Grid.Row="2" Style="{StaticResource FieldLabel}" Text="HEADSET" VerticalAlignment="Center" Margin="0,8,0,0" ToolTip="Music level in your own headset. Does not affect the broadcast."/>
                             <Slider Grid.Row="2" Grid.Column="1" Minimum="2" Maximum="100" Value="{Binding HeadsetVolume}" LargeChange="10" SmallChange="5" Margin="6,8,6,0"/>
                             <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding HeadsetVolume, Converter={StaticResource Percent}}" Style="{StaticResource FieldLabel}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,8,0,0"/>
                         </Grid>
@@ -356,14 +356,21 @@
                     <StackPanel VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <TextBlock Style="{StaticResource SectionIndex}" Text="03 /"/>
-                            <TextBlock Style="{StaticResource SectionLabel}" Text="IN WARDOGS, SET YOUR MICROPHONE TO"/>
+                            <TextBlock Style="{StaticResource SectionLabel}" Text="IN-GAME SETUP"/>
                         </StackPanel>
-                        <StackPanel Orientation="Horizontal">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
                             <Border Background="{StaticResource BgBrush}" BorderBrush="{StaticResource SandBrush}" BorderThickness="1" Padding="12,6" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding RadioMicName}" FontFamily="{StaticResource DisplayFont}" FontWeight="Black" FontSize="15" Foreground="{StaticResource SandBrush}"/>
+                                <TextBlock Text="{Binding RadioMicName}" FontFamily="{StaticResource DisplayFont}" FontWeight="Black" FontSize="15" Foreground="{StaticResource SandBrush}" TextWrapping="NoWrap"/>
                             </Border>
-                            <TextBlock Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="12,0,0,0" Text="Esc → Audio → Input device. Then use the game's own talk key as normal."/>
-                        </StackPanel>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0">
+                                <TextBlock Style="{StaticResource Muted}" Text="WARDOGS  →  Esc  →  Audio  →  Input device"/>
+                                <TextBlock Style="{StaticResource Muted}" Text="Transmit with the game's normal voice key."/>
+                            </StackPanel>
+                        </Grid>
                     </StackPanel>
                     <Grid Grid.Column="1" VerticalAlignment="Center" Margin="20,0,0,0">
                         <Button Style="{StaticResource PrimaryButton}" Content="START RADIO" Command="{Binding ToggleRadioCommand}" IsEnabled="{Binding CanStart}" Width="260" Height="56"
