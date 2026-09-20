@@ -1,0 +1,48 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Publish single-file exe
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          if ("${{ github.ref_type }}" -ne "tag") { $version = "0.0.0-dev" }
+          dotnet publish src/WardogsRadio/WardogsRadio.csproj -c Release -o publish /p:Version=$version
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WardogsRadio
+          path: publish/WardogsRadio.exe
+
+      - name: Create GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: publish/WardogsRadio.exe
+          generate_release_notes: true
+          body: |
+            ## Download
+            **[WardogsRadio.exe](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/WardogsRadio.exe)** — one file, no installer. Double-click it.
+
+            Windows may show a "Windows protected your PC" screen the first time because the exe is not code-signed. Click **More info → Run anyway**.
+
+            First launch does a one-time setup of the virtual microphone (VB-CABLE by VB-Audio, https://vb-cable.com — donationware). After that, it's: pick your mic, pick your music app, hit Start.

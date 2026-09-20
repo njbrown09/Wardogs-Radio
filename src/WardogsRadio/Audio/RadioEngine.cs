@@ -1,0 +1,196 @@
+using NAudio.CoreAudioApi;
+using NAudio.Wave;
+using NAudio.Wave.SampleProviders;
+
+namespace WardogsRadio.Audio;
+
+/// <summary>
+/// The whole signal chain:
+///
+///      microphone ──┐
+///                   ├─ mix ─ soft limiter ─► virtual cable ─► the game picks it as "Wardogs Radio"
+///      app audio  ──┘   (a tap; the app keeps playing through the headset as normal)
+/// </summary>
+public sealed class RadioEngine : IDisposable
+{
+    private static readonly WaveFormat MixFormat = WaveFormat.CreateIeeeFloatWaveFormat(48000, 2);
+
+    private WasapiCapture? _mic;
+    private ProcessLoopbackCapture? _app;
+    private WasapiOut? _out;
+    private BufferedWaveProvider? _micBuffer;
+    private BufferedWaveProvider? _appBuffer;
+    private VolumeSampleProvider? _micVolume;
+    private VolumeSampleProvider? _appVolume;
+    private readonly object _gate = new();
+
+    public bool IsRunning { get; private set; }
+    public float MicLevel { get; private set; }
+    public float AppLevel { get; private set; }
+
+    public event EventHandler<string>? Faulted;
+
+    private float _micGain = 1f, _appGain = 0.6f;
+    public float MicGain { get => _micGain; set { _micGain = value; if (_micVolume != null) _micVolume.Volume = value; } }
+    public float AppGain { get => _appGain; set { _appGain = value; if (_appVolume != null) _appVolume.Volume = value; } }
+
+    public void Start(string micDeviceId, uint appRootPid, string cablePlaybackId)
+    {
+        lock (_gate)
+        {
+            StopCore();
+            try
+            {
+                var micDevice = AudioDevices.GetDevice(micDeviceId)
+                    ?? throw new InvalidOperationException("That microphone is not connected any more.");
+                var cableDevice = AudioDevices.GetDevice(cablePlaybackId)
+                    ?? throw new InvalidOperationException("The Wardogs Radio virtual cable is missing. Restart the app to set it up again.");
+
+                // --- microphone -----------------------------------------------------------------
+                _mic = new WasapiCapture(micDevice, true, 20);
+                _micBuffer = new BufferedWaveProvider(_mic.WaveFormat)
+                {
+                    BufferDuration = TimeSpan.FromMilliseconds(500),
+                    DiscardOnBufferOverflow = true,
+                    ReadFully = true,
+                };
+                var micBuffer = _micBuffer;
+                _mic.DataAvailable += (_, e) => { micBuffer.AddSamples(e.Buffer, 0, e.BytesRecorded); TrimIfLagging(micBuffer); };
+                _mic.RecordingStopped += (_, e) => { if (e.Exception != null) Fault("Microphone stopped: " + e.Exception.Message); };
+                _micVolume = new VolumeSampleProvider(ToStereo48k(_micBuffer)) { Volume = _micGain };
+                var micMeter = new MeteringSampleProvider(_micVolume, 480);
+                micMeter.StreamVolume += (_, e) => MicLevel = Max(e.MaxSampleValues);
+
+                // --- application audio ------------------------------------------------------------
+                _appBuffer = new BufferedWaveProvider(ProcessLoopbackCapture.OutputFormat)
+                {
+                    BufferDuration = TimeSpan.FromMilliseconds(500),
+                    DiscardOnBufferOverflow = true,
+                    ReadFully = true,
+                };
+                var appBuffer = _appBuffer;
+                _app = new ProcessLoopbackCapture(appRootPid);
+                _app.DataAvailable += (_, e) => { appBuffer.AddSamples(e.Buffer, 0, e.BytesRecorded); TrimIfLagging(appBuffer); };
+                _app.Stopped += (_, ex) => { if (ex != null) Fault("App audio stopped: " + ex.Message); };
+                _appVolume = new VolumeSampleProvider(_appBuffer.ToSampleProvider()) { Volume = _appGain };
+                var appMeter = new MeteringSampleProvider(_appVolume, 480);
+                appMeter.StreamVolume += (_, e) => AppLevel = Max(e.MaxSampleValues);
+
+                // --- mix and send to the cable ----------------------------------------------------
+                var mixer = new MixingSampleProvider(MixFormat) { ReadFully = true };
+                mixer.AddMixerInput(micMeter);
+                mixer.AddMixerInput(appMeter);
+                var limited = new SoftLimiter(mixer);
+
+                _out = new WasapiOut(cableDevice, AudioClientShareMode.Shared, true, 30);
+                _out.Init(limited);
+                _out.PlaybackStopped += (_, e) => { if (e.Exception != null) Fault("Output stopped: " + e.Exception.Message); };
+
+                _app.Start();
+                _mic.StartRecording();
+                _out.Play();
+                IsRunning = true;
+            }
+            catch
+            {
+                StopCore();
+                throw;
+            }
+        }
+    }
+
+    public void Stop()
+    {
+        lock (_gate) StopCore();
+    }
+
+    private void StopCore()
+    {
+        IsRunning = false;
+        try { _out?.Stop(); } catch { }
+        try { _mic?.StopRecording(); } catch { }
+        try { _app?.Stop(); } catch { }
+        _out?.Dispose(); _out = null;
+        _mic?.Dispose(); _mic = null;
+        _app?.Dispose(); _app = null;
+        _micBuffer = null; _appBuffer = null;
+        _micVolume = null; _appVolume = null;
+        MicLevel = 0; AppLevel = 0;
+    }
+
+    private void Fault(string message)
+    {
+        Faulted?.Invoke(this, message);
+    }
+
+    private static float Max(float[] values)
+    {
+        float m = 0f;
+        foreach (var v in values) if (v > m) m = v;
+        return m;
+    }
+
+    // Clocks of the mic, the app, and the cable all drift a little. If a buffer builds up past
+    // ~150 ms we drop the backlog so the radio never lags behind the player's voice.
+    private static void TrimIfLagging(BufferedWaveProvider buffer)
+    {
+        if (buffer.BufferedDuration > TimeSpan.FromMilliseconds(150)) buffer.ClearBuffer();
+    }
+
+    private static ISampleProvider ToStereo48k(IWaveProvider source)
+    {
+        ISampleProvider s = source.ToSampleProvider();
+        if (s.WaveFormat.Channels == 1) s = new MonoToStereoSampleProvider(s);
+        else if (s.WaveFormat.Channels > 2) s = new MultiChannelToStereo(s);
+        if (s.WaveFormat.SampleRate != 48000) s = new WdlResamplingSampleProvider(s, 48000);
+        return s;
+    }
+
+    public void Dispose() => Stop();
+
+    /// <summary>Gentle saturation so mic + music never hard-clips into the game.</summary>
+    private sealed class SoftLimiter(ISampleProvider source) : ISampleProvider
+    {
+        public WaveFormat WaveFormat => source.WaveFormat;
+        public int Read(float[] buffer, int offset, int count)
+        {
+            int n = source.Read(buffer, offset, count);
+            for (int i = offset; i < offset + n; i++)
+            {
+                float x = buffer[i];
+                if (x > 0.8f || x < -0.8f) buffer[i] = MathF.Tanh(x);
+            }
+            return n;
+        }
+    }
+
+    /// <summary>Folds any channel count down to stereo by averaging odd/even channels.</summary>
+    private sealed class MultiChannelToStereo : ISampleProvider
+    {
+        private readonly ISampleProvider _src;
+        private float[] _tmp = Array.Empty<float>();
+        public MultiChannelToStereo(ISampleProvider src)
+        {
+            _src = src;
+            WaveFormat = WaveFormat.CreateIeeeFloatWaveFormat(src.WaveFormat.SampleRate, 2);
+        }
+        public WaveFormat WaveFormat { get; }
+        public int Read(float[] buffer, int offset, int count)
+        {
+            int ch = _src.WaveFormat.Channels;
+            int frames = count / 2;
+            int need = frames * ch;
+            if (_tmp.Length < need) _tmp = new float[need];
+            int got = _src.Read(_tmp, 0, need) / ch;
+            int lCount = (ch + 1) / 2, rCount = Math.Max(1, ch / 2);
+            for (int f = 0; f < got; f++)
+            {
+                float l = 0, r = 0;
+                for (int c = 0; c < ch; c++) { if (c % 2 == 0) l += _tmp[f * ch + c]; else r += _tmp[f * ch + c]; }
+                buffer[offset + f * 2] = l / lCount;
+                buffer[offset + f * 2 + 1] = r / rCount;
+            }
+            return got * 2;
+        }
+    }
+}

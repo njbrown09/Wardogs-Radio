@@ -1,0 +1,315 @@
+<Window x:Class="WardogsRadio.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:WardogsRadio"
+        xmlns:vm="clr-namespace:WardogsRadio.ViewModels"
+        mc:Ignorable="d"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        d:DataContext="{d:DesignInstance Type=vm:MainViewModel}"
+        Title="Wardogs Radio"
+        Width="800" Height="800" MinWidth="720" MinHeight="620"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None" ResizeMode="CanResize"
+        Background="{StaticResource BgBrush}"
+        FontFamily="{StaticResource UiTextFont}"
+        TextOptions.TextFormattingMode="Ideal"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0"/>
+    </WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <local:LevelToStarConverter x:Key="Level"/>
+        <local:LevelToStarConverter x:Key="LevelInv" Inverse="True"/>
+        <local:BoolToVisibilityConverter x:Key="Vis"/>
+        <local:BoolToVisibilityConverter x:Key="VisInv" Inverse="True"/>
+        <local:NullToVisibilityConverter x:Key="VisIfSet"/>
+        <local:EnumEqualsToVisibilityConverter x:Key="StageIs"/>
+        <local:PercentConverter x:Key="Percent"/>
+
+        <DataTemplate x:Key="LevelMeter">
+            <Grid Height="6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="{Binding Converter={StaticResource Level}}"/>
+                    <ColumnDefinition Width="{Binding Converter={StaticResource LevelInv}}"/>
+                </Grid.ColumnDefinitions>
+                <Border Grid.ColumnSpan="2" Background="{StaticResource BorderBrush}" CornerRadius="3"/>
+                <Border Grid.Column="0" Background="{StaticResource GoodBrush}" CornerRadius="3"/>
+            </Grid>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="52"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- ===== Title bar ===== -->
+        <Grid Grid.Row="0" Background="Transparent" MouseLeftButtonDown="TitleBar_MouseDown">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal" Margin="18,0,0,0" VerticalAlignment="Center">
+                <Image Source="pack://application:,,,/Assets/WardogsRadio.ico" Width="24" Height="24" Margin="0,0,10,0"/>
+                <TextBlock Text="WARDOGS RADIO" FontFamily="{StaticResource UiFont}" FontSize="15" FontWeight="Bold" VerticalAlignment="Center">
+                    <TextBlock.Effect>
+                        <DropShadowEffect BlurRadius="0" ShadowDepth="0" Opacity="0"/>
+                    </TextBlock.Effect>
+                </TextBlock>
+                <Border Margin="14,0,0,0" CornerRadius="10" Padding="10,3" VerticalAlignment="Center"
+                        Background="{StaticResource OnAirDimBrush}" Visibility="{Binding IsOnAir, Converter={StaticResource Vis}}">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="8" Height="8" Fill="{StaticResource OnAirBrush}" Margin="0,0,6,0" VerticalAlignment="Center">
+                            <Ellipse.Triggers>
+                                <EventTrigger RoutedEvent="Loaded">
+                                    <BeginStoryboard>
+                                        <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" From="1" To="0.25" Duration="0:0:0.8"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </EventTrigger>
+                            </Ellipse.Triggers>
+                        </Ellipse>
+                        <TextBlock Text="ON AIR" FontSize="11" FontWeight="Bold" Foreground="{StaticResource OnAirBrush}"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="0,0,8,0" VerticalAlignment="Center">
+                <Button Style="{StaticResource TitleBarButton}" Click="Minimize_Click" ToolTip="Minimize">
+                    <Path Data="M0,0 L10,0" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.5"/>
+                </Button>
+                <Button Style="{StaticResource CloseButton}" Click="Close_Click" ToolTip="Close">
+                    <Path Data="M0,0 L10,10 M10,0 L0,10" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.5"/>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- ===== Setup screen ===== -->
+        <Grid Grid.Row="1" Visibility="{Binding IsSetupMode, Converter={StaticResource Vis}}">
+            <Border Style="{StaticResource Card}" Width="540" VerticalAlignment="Center" Padding="36,34">
+                <StackPanel>
+                    <Image Source="pack://application:,,,/Assets/WardogsRadio.ico" Width="72" Height="72" HorizontalAlignment="Left" Margin="0,0,0,18"/>
+                    <TextBlock Style="{StaticResource H1}" Text="One-time setup" Margin="0,0,0,8"/>
+
+                    <!-- Intro -->
+                    <StackPanel Visibility="{Binding Stage, Converter={StaticResource StageIs}, ConverterParameter=Intro}">
+                        <TextBlock FontSize="15" Margin="0,0,0,6">Wardogs Radio needs a virtual microphone so the game can hear your music. This takes about a minute and only happens once.</TextBlock>
+                        <TextBlock Style="{StaticResource Muted}" Margin="0,0,0,22">Windows will ask for permission along the way. Just click Yes / Install when it does.</TextBlock>
+                        <Button Style="{StaticResource PrimaryButton}" Content="Set it up" Command="{Binding BeginSetupCommand}" HorizontalAlignment="Left"/>
+                    </StackPanel>
+
+                    <!-- Downloading -->
+                    <StackPanel Visibility="{Binding Stage, Converter={StaticResource StageIs}, ConverterParameter=Downloading}">
+                        <TextBlock FontSize="16" Text="{Binding SetupMessage}" Margin="0,0,0,14"/>
+                        <ProgressBar Minimum="0" Maximum="1" Value="{Binding DownloadProgress, Mode=OneWay}" Margin="0,0,0,10"/>
+                        <TextBlock Style="{StaticResource Muted}" Text="{Binding SetupDetail}"/>
+                    </StackPanel>
+
+                    <!-- Installing -->
+                    <StackPanel Visibility="{Binding Stage, Converter={StaticResource StageIs}, ConverterParameter=Installing}">
+                        <TextBlock Style="{StaticResource H2}" FontSize="20" Text="{Binding SetupMessage}" Margin="0,0,0,10"/>
+                        <TextBlock FontSize="15" Text="{Binding SetupDetail}" Margin="0,0,0,18"/>
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="10" Height="10" Fill="{StaticResource AccentBrush}" Margin="0,0,8,0" VerticalAlignment="Center">
+                                <Ellipse.Triggers>
+                                    <EventTrigger RoutedEvent="Loaded">
+                                        <BeginStoryboard>
+                                            <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                                <DoubleAnimation Storyboard.TargetProperty="Opacity" From="1" To="0.2" Duration="0:0:0.7"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </EventTrigger>
+                                </Ellipse.Triggers>
+                            </Ellipse>
+                            <TextBlock Style="{StaticResource Muted}" Text="Waiting for the installer to finish…"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Reboot needed -->
+                    <StackPanel Visibility="{Binding Stage, Converter={StaticResource StageIs}, ConverterParameter=RebootNeeded}">
+                        <TextBlock Style="{StaticResource H2}" FontSize="20" Text="{Binding SetupMessage}" Margin="0,0,0,10"/>
+                        <TextBlock FontSize="15" Text="{Binding SetupDetail}" Margin="0,0,0,22"/>
+                        <StackPanel Orientation="Horizontal">
+                            <Button Style="{StaticResource PrimaryButton}" Content="Restart now" Command="{Binding RebootNowCommand}"/>
+                            <Button Style="{StaticResource LinkButton}" Content="I'll restart later" Click="Close_Click" Margin="16,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Error -->
+                    <StackPanel Visibility="{Binding Stage, Converter={StaticResource StageIs}, ConverterParameter=Error}">
+                        <TextBlock Style="{StaticResource H2}" FontSize="20" Text="{Binding SetupMessage}" Foreground="{StaticResource OnAirBrush}" Margin="0,0,0,10"/>
+                        <TextBlock FontSize="15" Text="{Binding SetupDetail}" Margin="0,0,0,22"/>
+                        <Button Style="{StaticResource PrimaryButton}" Content="Try again" Command="{Binding BeginSetupCommand}" HorizontalAlignment="Left"/>
+                    </StackPanel>
+
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,28,0,14"/>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Muted}" FontSize="12" Text="The virtual microphone is VB-CABLE by VB-Audio (donationware)." VerticalAlignment="Center"/>
+                        <Button Style="{StaticResource LinkButton}" Content="vb-audio.com" Command="{Binding OpenVbAudioCommand}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- ===== Radio screen ===== -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Visibility="{Binding IsSetupMode, Converter={StaticResource VisInv}}">
+            <StackPanel Margin="28,6,28,20" MaxWidth="900">
+
+                <!-- Error / info banners -->
+                <Border Background="{StaticResource OnAirDimBrush}" BorderBrush="{StaticResource OnAirBrush}" BorderThickness="1" CornerRadius="10" Padding="14,10" Margin="0,0,0,14"
+                        Visibility="{Binding ErrorMessage, Converter={StaticResource VisIfSet}}">
+                    <TextBlock Text="{Binding ErrorMessage}" FontWeight="SemiBold"/>
+                </Border>
+                <Border Background="{StaticResource AccentDimBrush}" BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" CornerRadius="10" Padding="14,10" Margin="0,0,0,14"
+                        Visibility="{Binding InfoMessage, Converter={StaticResource VisIfSet}}">
+                    <TextBlock Text="{Binding InfoMessage}"/>
+                </Border>
+                <Border Background="{StaticResource AccentDimBrush}" BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" CornerRadius="10" Padding="14,10" Margin="0,0,0,14"
+                        Visibility="{Binding NeedsBranding, Converter={StaticResource Vis}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock VerticalAlignment="Center" Margin="0,0,12,0">One last step: let the microphone be called "Wardogs Radio" so it's easy to find in the game.</TextBlock>
+                        <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="Name it now" Command="{Binding FinishBrandingCommand}"/>
+                    </Grid>
+                </Border>
+
+                <!-- Step 1: microphone -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                            <Border Style="{StaticResource StepNumber}"><TextBlock Text="1" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                            <TextBlock Style="{StaticResource H2}" Text="Your microphone" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <ComboBox ItemsSource="{Binding Microphones}" SelectedItem="{Binding SelectedMic}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="110"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="56"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Voice volume" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="200" Value="{Binding MicVolume}" LargeChange="10" SmallChange="5" Margin="8,0"/>
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding MicVolume, Converter={StaticResource Percent}}" Style="{StaticResource Muted}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                            <ContentPresenter Grid.Row="1" Grid.Column="1" Content="{Binding MicLevel}" ContentTemplate="{StaticResource LevelMeter}" Margin="8,2,8,0"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource Muted}" FontSize="11" Text="Talk: bar moves" VerticalAlignment="Center"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Step 2: app -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <Border Style="{StaticResource StepNumber}"><TextBlock Text="2" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                            <TextBlock Style="{StaticResource H2}" Text="What plays on the radio" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource Muted}" Text="Pick the app. It keeps playing in your own headset like normal." Margin="40,0,0,12"/>
+                        <ListBox Style="{StaticResource AppTileList}" ItemsSource="{Binding Apps}" SelectedItem="{Binding SelectedApp}"
+                                 Visibility="{Binding HasApps, Converter={StaticResource Vis}}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <Image Grid.Row="0" Source="{Binding Icon}" Width="30" Height="30" HorizontalAlignment="Left" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                        <TextBlock Grid.Row="1" Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="13" Margin="0,6,0,0" TextTrimming="CharacterEllipsis" MaxHeight="36"/>
+                                        <StackPanel Grid.Row="2" Orientation="Horizontal" Visibility="{Binding IsPlaying, Converter={StaticResource Vis}}">
+                                            <Ellipse Width="7" Height="7" Fill="{StaticResource GoodBrush}" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                            <TextBlock Text="playing" FontSize="11" Foreground="{StaticResource GoodBrush}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <Border Background="{StaticResource BgBrush}" CornerRadius="12" Padding="18,16" Visibility="{Binding HasApps, Converter={StaticResource VisInv}}">
+                            <TextBlock Style="{StaticResource Muted}" FontSize="14">Nothing is making sound right now. Open Spotify (or whatever you want on the radio), press play, and it shows up here.</TextBlock>
+                        </Border>
+                        <Grid Margin="0,6,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="110"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="56"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Music volume" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding MusicVolume}" LargeChange="10" SmallChange="5" Margin="8,0"/>
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding MusicVolume, Converter={StaticResource Percent}}" Style="{StaticResource Muted}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                            <ContentPresenter Grid.Row="1" Grid.Column="1" Content="{Binding AppLevel}" ContentTemplate="{StaticResource LevelMeter}" Margin="8,2,8,0"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource Muted}" FontSize="11" Text="On the radio only" VerticalAlignment="Center"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Step 3: start -->
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <Border Style="{StaticResource StepNumber}"><TextBlock Text="3" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                                <TextBlock Style="{StaticResource H2}" Text="In Wardogs, set your microphone to" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <Border Background="{StaticResource BgBrush}" BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" CornerRadius="10" Padding="14,8" HorizontalAlignment="Left" Margin="40,0,0,6">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="M4,0 A4,4 0 0 1 8,4 L8,10 A4,4 0 0 1 0,10 L0,4 A4,4 0 0 1 4,0 Z M-3,9 A7,7 0 0 0 11,9 M4,16 L4,19 M0,19 L8,19" Stroke="{StaticResource AccentBrush}" StrokeThickness="1.6" Fill="{StaticResource AccentBrush}" Width="14" Height="20" Margin="3,0,10,0" Stretch="Uniform" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding RadioMicName}" FontFamily="{StaticResource UiFont}" FontSize="17" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                            <TextBlock Style="{StaticResource Muted}" Text="Then leave your mic open in the game. Everyone hears you and the music." Margin="40,0,0,0"/>
+                        </StackPanel>
+                        <Grid Grid.Column="1" VerticalAlignment="Center" Margin="20,0,0,0">
+                            <Button Style="{StaticResource PrimaryButton}" Content="START RADIO" Command="{Binding ToggleRadioCommand}" IsEnabled="{Binding CanStart}" MinWidth="200"
+                                    Visibility="{Binding IsOnAir, Converter={StaticResource VisInv}}"/>
+                            <Button Style="{StaticResource DangerButton}" Content="STOP RADIO" Command="{Binding ToggleRadioCommand}" MinWidth="200"
+                                    Visibility="{Binding IsOnAir, Converter={StaticResource Vis}}">
+                                <Button.Effect>
+                                    <DropShadowEffect Color="{StaticResource OnAirColor}" BlurRadius="28" ShadowDepth="0" Opacity="0.55"/>
+                                </Button.Effect>
+                            </Button>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <!-- Footer -->
+                <Grid Margin="4,0,4,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource Muted}" FontSize="12" Text="{Binding Version}" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Muted}" FontSize="12" Text="Virtual mic by VB-CABLE (donationware)" VerticalAlignment="Center"/>
+                        <Button Style="{StaticResource LinkButton}" Content="vb-audio.com" Command="{Binding OpenVbAudioCommand}" Margin="4,0,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>
